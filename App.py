@@ -45,7 +45,8 @@ def create_synthetic_lending_club_data(num_samples=50000):
     data['dti'] = data['dti'].clip(1, 100)
     data.loc[data['loan_status'] == 'Charged Off', 'dti'] *= np.random.uniform(1.1, 1.5, size=len(data[data['loan_status'] == 'Charged Off']))
     purposes = ['debt_consolidation', 'credit_card', 'home_improvement', 'other', 'major_purchase', 'small_business']
-    purpose_dist = [0.58, 0.22, 0.06, 0.05, 0.02, 0.01]
+    # FIX: Adjusted probabilities to sum to 1.0
+    purpose_dist = [0.58, 0.22, 0.06, 0.07, 0.06, 0.01]
     data['purpose'] = np.random.choice(purposes, size=num_samples, p=purpose_dist)
     states = ['CA', 'NY', 'TX', 'FL', 'IL', 'NJ', 'PA', 'OH', 'GA', 'VA', 'NV', 'AZ', 'MA', 'WA', 'MD']
     data['addr_state'] = np.random.choice(states, size=num_samples)
@@ -372,3 +373,4 @@ st.sidebar.markdown(
     4. Go to [share.streamlit.io](https://share.streamlit.io) to deploy your app.
     """
 )
+
