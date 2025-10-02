@@ -12,6 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 # --- PAGE CONFIGURATION ---
+st.image("Pragyan-Ai-Logo_short.png")
 st.set_page_config(
     page_title="Lending Club Loan Analysis Dashboard",
     page_icon="📊",
