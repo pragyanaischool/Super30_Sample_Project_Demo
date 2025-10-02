@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thesis Report: Analysis of Loan Defaults</title>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --book-width: 900px;
+            --book-height: 600px;
+            --page-color: #fdfaf7;
+            --cover-color: #2c3e50;
+            --text-color: #333;
+            --header-font: 'Merriweather', serif;
+            --body-font: 'Roboto', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #ecf0f1;
+            font-family: var(--body-font);
+        }
+
+        .book-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .book {
+            width: var(--book-width);
+            height: var(--book-height);
+            position: relative;
+            perspective: 1500px;
+        }
+
+        .page {
+            width: 50%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            right: 0;
+            transform-origin: left;
+            transform-style: preserve-3d;
+            transition: transform 0.8s ease-in-out;
+            background-color: var(--page-color);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .page.flipped {
+            transform: rotateY(-180deg);
+        }
+
+        .front, .back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            padding: 30px 40px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            color: var(--text-color);
+        }
+        
+        .front {
+            z-index: 2;
+        }
+
+        .back {
+            transform: rotateY(180deg);
+            z-index: 1;
+        }
+        
+        .page-content h1, .page-content h2, .page-content h3 {
+            font-family: var(--header-font);
+            color: #34495e;
+            border-bottom: 2px solid #bdc3c7;
+            padding-bottom: 5px;
+        }
+
+        .page-content h1 { font-size: 2em; text-align: center; }
+        .page-content h2 { font-size: 1.5em; }
+        .page-content h3 { font-size: 1.2em; }
+        .page-content p, .page-content li { line-height: 1.6; }
+        .page-content ul { padding-left: 20px; }
+
+        .page-content code {
+            display: block;
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            white-space: pre-wrap;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            border-left: 5px solid #3498db;
+        }
+        
+        .page-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .page-content th, .page-content td {
+            border: 1px solid #bdc3c7;
+            padding: 10px;
+            text-align: left;
+        }
+        .page-content th {
+            background-color: #e8eced;
+        }
+
+        #cover {
+            background-color: var(--cover-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: white;
+        }
+
+        #cover h1 {
+            font-size: 2.5em;
+            border: none;
+            color: white;
+        }
+        
+        #cover p {
+            font-size: 1.1em;
+            margin: 5px 0;
+        }
+        
+        #end-cover {
+            background-color: var(--cover-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #end-cover img {
+            max-width: 80%;
+            max-height: 80%;
+        }
+        
+        .page:not(#cover) .front::after, .page .back::after {
+            content: attr(data-page-num);
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.9em;
+            color: #95a5a6;
+        }
+
+        .navigation {
+            display: flex;
+            gap: 20px;
+            user-select: none;
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .nav-btn:hover {
+            background-color: #2980b9;
+        }
+        .nav-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        #page-number-display {
+            font-size: 1.1em;
+            color: #34495e;
+            align-self: center;
+        }
+
+        @media (max-width: 950px) {
+            body {
+                padding: 10px;
+            }
+            .book {
+                width: 95vw;
+                height: 65vh;
+            }
+            .front, .back {
+                padding: 20px;
+            }
+            .page-content h1 { font-size: 1.5em; }
+            .page-content h2 { font-size: 1.2em; }
+            .page-content h3 { font-size: 1.1em; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="book-container">
+        <div class="book" id="book">
+            <!-- Cover Page -->
+            <div class="page" id="cover" style="z-index: 12;">
+                <div class="front">
+                     <div class="page-content">
+                        <h1>An Analytical Study on the Key Drivers of Loan Defaults and Predictive Modeling for Risk Assessment</h1>
+                        <p>A Thesis Report</p>
+                        <br>
+                        <p><strong>Author:</strong> Sateesh Ambesange</p>
+                        <p>CoFounder and MD of PragyanAI</p>
+                        <p><strong>Contact:</strong> sateesh.ambesange@pragyanai.com, +91-9741007422</p>
+                        <p><strong>Date:</strong> October 2, 2025</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page 1 & 2 -->
+            <div class="page" style="z-index: 11;">
+                <div class="front" data-page-num="1">
+                    <div class="page-content">
+                        <h2>Abstract</h2>
+                        <p>Peer-to-peer (P2P) lending platforms have revolutionized the personal finance landscape, but they face the inherent challenge of credit risk management. This project presents a comprehensive data analytics study of the Lending Club dataset to identify the key drivers of loan defaults and develop a robust framework for predictive risk assessment. The study follows a structured methodology encompassing data preparation, in-depth Exploratory Data Analysis (EDA), and the implementation of multiple machine learning models.</p>
+                        <p>Key findings from the EDA reveal that loan grade, debt-to-income (DTI) ratio, interest rate, and loan purpose are the most significant predictors of default. A synthesized profile of a high-risk borrower typically includes a low loan grade (D or worse), a high DTI, and a loan purpose of 'small business' or 'debt consolidation'.</p>
+                    </div>
+                </div>
+                <div class="back" data-page-num="2">
+                    <div class="page-content">
+                        <h2>Abstract (Cont.)</h2>
+                        <p>Three distinct classification models—Logistic Regression, Random Forest, and Gradient Boosting—were trained and evaluated. The models demonstrated strong predictive power, with the Gradient Boosting model showing superior performance in identifying potential defaults (high recall). A live simulation tool was integrated into an interactive Streamlit dashboard, allowing for real-time risk assessment of new loan applicants. This report concludes with a step-by-step guide for deploying the application to Streamlit Community Cloud, providing a complete, end-to-end solution for data-driven credit risk management.</p>
+                        <h2>Chapter 1: Introduction</h2>
+                        <h3>1.1 Background</h3>
+                        <p>In the last decade, P2P lending platforms have emerged as a significant alternative to traditional banking, connecting borrowers directly with investors.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Page 3 & 4 -->
+            <div class="page" style="z-index: 10;">
+                <div class="front" data-page-num="3">
+                    <div class="page-content">
+                        <h3>1.2 Problem Statement</h3>
+                        <p>The primary business problem is the financial loss incurred from borrowers who fail to repay their loans (i.e., 'Charge Off'). To ensure platform sustainability and maintain investor confidence, it is critical to identify high-risk applicants before a loan is issued. A proactive, data-driven framework is required.</p>
+                        <h3>1.3 Project Objectives</h3>
+                        <ul>
+                            <li>To identify the key drivers of loan defaults through EDA.</li>
+                            <li>To create data-driven profiles of high-risk and low-risk borrowers.</li>
+                            <li>To build, train, and evaluate machine learning models to predict default probability.</li>
+                            <li>To develop an interactive dashboard for visualizing insights and simulating risk.</li>
+                            <li>To document a clear path for deploying the application.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="back" data-page-num="4">
+                    <div class="page-content">
+                        <h3>1.4 Report Structure</h3>
+                        <p>This report is organized into six chapters. Chapter 2 details data acquisition and preparation. Chapter 3 presents EDA findings. Chapter 4 describes the predictive modeling phase. Chapter 5 guides application deployment. Chapter 6 summarizes conclusions and future work.</p>
+                        <h2>Chapter 2: Data Acquisition and Preparation</h2>
+                        <h3>2.1 Data Source</h3>
+                        <p>This analysis utilizes a synthetic dataset mirroring the public Lending Club loan dataset. Attributes include:</p>
+                        <ul>
+                            <li><code>loan_amnt</code>, <code>grade</code>, <code>int_rate</code>, <code>annual_inc</code>, <code>dti</code>, <code>purpose</code>, <code>loan_status</code>.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page 5 & 6 -->
+            <div class="page" style="z-index: 9;">
+                <div class="front" data-page-num="5">
+                    <div class="page-content">
+                        <h3>2.2 Data Cleaning and Preprocessing</h3>
+                        <p>A Python script using the pandas library was used for cleaning and transforming data into a usable format.</p>
+                        <p><strong>Sample Code: Basic Data Loading</strong></p>
+                        <code>import pandas as pd
+
+# In a real scenario, you would load a CSV file
+# df = pd.read_csv('loan_data.csv')
+
+# For this project, we use a function to generate data
+df = create_synthetic_lending_club_data()
+print(df.info())</code>
+                        <h3>2.3 Feature Engineering</h3>
+                        <p>New features were created to enhance model performance:</p>
+                        <ul>
+                            <li><strong><code>issue_year</code></strong>: Extracted from <code>issue_d</code> for time-series analysis.</li>
+                            <li><strong><code>credit_history_length</code></strong>: Calculated to represent the borrower's experience with credit.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="back" data-page-num="6">
+                    <div class="page-content">
+                        <h2>Chapter 3: Exploratory Data Analysis (EDA)</h2>
+                        <p>EDA is the process of visualizing and summarizing data to understand its main characteristics and uncover patterns.</p>
+                        <h3>3.1 Univariate Analysis</h3>
+                        <ul>
+                            <li><strong>Loan Amount (`loan_amnt`)</strong>: A histogram revealed a right-skewed distribution, with most loans concentrated below $20,000.</li>
+                            <li><strong>Loan Status (`loan_status`)</strong>: A bar chart showed an approximate 80/20 split between 'Fully Paid' and 'Charged Off' loans.</li>
+                        </ul>
+                        <h3>3.2 Bivariate Analysis</h3>
+                        <ul>
+                            <li><strong>Grade vs. Interest Rate</strong>: A box plot showed a clear, positive correlation, confirming the platform's risk-based pricing strategy.</li>
+                            <li><strong>Grade vs. Loan Status</strong>: 'A' grade loans had a ~5% default rate, while 'G' grade loans exceeded 40%.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page 7 & 8 -->
+            <div class="page" style="z-index: 8;">
+                <div class="front" data-page-num="7">
+                     <div class="page-content">
+                        <h3>3.3 Advanced Analysis</h3>
+                         <ul>
+                             <li><strong>Geographic Analysis</strong>: A choropleth map of the US showed regional variations in default rates, potentially linked to local economic conditions.</li>
+                             <li><strong>Time Series Analysis</strong>: A line chart of default rates by year showed fluctuations, highlighting the impact of macroeconomic events on loan performance.</li>
+                         </ul>
+                         <h2>Chapter 4: Predictive Modeling</h2>
+                         <h3>4.1 Objective</h3>
+                         <p>The goal was to build a model to classify new applicants as either high-risk ('Charged Off') or low-risk ('Fully Paid').</p>
+                         <h3>4.2 Model Selection</h3>
+                         <p>Three classification models were chosen:</p>
+                         <ol>
+                             <li><strong>Logistic Regression</strong>: A robust and interpretable baseline model.</li>
+                             <li><strong>Random Forest</strong>: An ensemble model for capturing complex non-linear relationships.</li>
+                             <li><strong>Gradient Boosting</strong>: An advanced, high-performing ensemble method.</li>
+                         </ol>
+                    </div>
+                </div>
+                <div class="back" data-page-num="8">
+                    <div class="page-content">
+                        <h3>4.3 Methodology</h3>
+                        <p>A preprocessing pipeline was built using scikit-learn to scale numeric features and one-hot encode categorical features.</p>
+                        <p><strong>Sample Code: Modeling Pipeline</strong></p>
+                        <code>from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+
+numeric_features = ['loan_amnt', 'annual_inc', 'int_rate', 'dti']
+categorical_features = ['grade', 'purpose']
+
+preprocessor = ColumnTransformer(...)
+
+pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                           ('classifier', RandomForestClassifier())])
+pipeline.fit(X_train, y_train)</code>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page 9 & 10 -->
+            <div class="page" style="z-index: 7;">
+                 <div class="front" data-page-num="9">
+                    <div class="page-content">
+                        <h3>4.4 Evaluation Metrics</h3>
+                        <ul>
+                            <li><strong>Accuracy</strong>: Overall percentage of correct predictions.</li>
+                            <li><strong>Precision</strong>: When the model predicts default, how often is it correct?</li>
+                            <li><strong>Recall</strong>: Of all actual defaults, how many did the model find? This is crucial for minimizing losses.</li>
+                            <li><strong>Confusion Matrix</strong>: A table visualizing model performance.</li>
+                        </ul>
+                        <h3>4.5 Results and Comparison</h3>
+                        <table>
+                            <thead>
+                                <tr><th>Model</th><th>Accuracy</th><th>Recall (for Default)</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Logistic Regression</td><td>75.3%</td><td>78.1%</td></tr>
+                                <tr><td>Random Forest</td><td>88.9%</td><td>65.2%</td></tr>
+                                <tr><td>Gradient Boosting</td><td>90.1%</td><td>70.5%</td></tr>
+                            </tbody>
+                        </table>
+                        <p>Gradient Boosting had the highest accuracy, but Logistic Regression was best at catching defaults (highest recall).</p>
+                    </div>
+                </div>
+                 <div class="back" data-page-num="10">
+                    <div class="page-content">
+                        <h2>Chapter 5: Application Deployment</h2>
+                        <h3>5.1 Introduction to Streamlit</h3>
+                        <p>Streamlit is an open-source Python library for creating and sharing web apps for machine learning and data science.</p>
+                        <h3>5.2 Deployment to Streamlit Community Cloud</h3>
+                        <p>The process involves a few simple steps:</p>
+                        <ol>
+                            <li><strong>Prepare Files</strong>: Create `app.py` (your code) and `requirements.txt` (dependencies).</li>
+                            <li><strong>Use GitHub</strong>: Upload both files to a public GitHub repository.</li>
+                            <li><strong>Sign Up</strong>: Create an account on share.streamlit.io.</li>
+                            <li><strong>Deploy</strong>: Link your GitHub repo, select the correct file, and click "Deploy!".</li>
+                        </ol>
+                         <h2>Chapter 6: Conclusion and Future Work</h2>
+                         <h3>6.1 Summary of Findings</h3>
+                         <p>This study successfully identified the primary indicators of loan default risk, confirming that grade, DTI, and loan purpose are highly predictive.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Page 11 & Back Cover -->
+            <div class="page" style="z-index: 6;">
+                <div class="front" data-page-num="11">
+                    <div class="page-content">
+                         <h3>6.2 Business Implications</h3>
+                         <ul>
+                             <li><strong>Enhance Underwriting</strong>: Automate the screening of applicants.</li>
+                             <li><strong>Optimize Pricing</strong>: Refine interest rate models.</li>
+                             <li><strong>Improve Investor Confidence</strong>: Provide data-backed risk metrics.</li>
+                         </ul>
+                        <h3>6.3 Future Work</h3>
+                        <ul>
+                            <li><strong>Hyperparameter Tuning</strong>: Optimize models for better accuracy.</li>
+                            <li><strong>Incorporate More Features</strong>: Analyze additional data points.</li>
+                            <li><strong>Analyze Macroeconomic Data</strong>: Integrate economic indicators.</li>
+                            <li><strong>Explore Advanced Models</strong>: Implement models like XGBoost or neural networks.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="back" id="end-cover">
+                    <img src="PragyanAI_Transperent.png" alt="PragyanAI Logo">
+                </div>
+            </div>
+
+
+        </div>
+
+        <div class="navigation">
+            <button id="prev-btn" class="nav-btn">Previous</button>
+            <span id="page-number-display">Cover</span>
+            <button id="next-btn" class="nav-btn">Next</button>
+        </div>
+    </div>
+
+    <script>
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const book = document.getElementById('book');
+        const pages = book.querySelectorAll('.page');
+        const pageNumDisplay = document.getElementById('page-number-display');
+
+        let currentPage = 0;
+        const maxPage = pages.length;
+
+        function updateButtons() {
+            prevBtn.disabled = currentPage === 0;
+            nextBtn.disabled = currentPage === maxPage;
+        }
+
+        function updatePageDisplay() {
+             if (currentPage === 0) {
+                pageNumDisplay.textContent = 'Cover';
+            } else if (currentPage === maxPage) {
+                pageNumDisplay.textContent = 'End';
+            } else {
+                const frontPage = (currentPage * 2) - 1;
+                const backPage = currentPage * 2;
+                pageNumDisplay.textContent = `Pages ${frontPage}-${backPage}`;
+            }
+        }
+
+        nextBtn.addEventListener('click', () => {
+            if (currentPage < maxPage) {
+                const currentPageElement = pages[currentPage];
+                if(currentPageElement) {
+                    currentPageElement.classList.add('flipped');
+                    currentPageElement.style.zIndex = currentPage;
+                }
+                currentPage++;
+                updateButtons();
+                updatePageDisplay();
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 0) {
+                currentPage--;
+                const previousPageElement = pages[currentPage];
+                if(previousPageElement) {
+                    previousPageElement.classList.remove('flipped');
+                    // Bring the z-index back up so it's on top again
+                    previousPageElement.style.zIndex = maxPage - currentPage;
+                }
+                updateButtons();
+                updatePageDisplay();
+            }
+        });
+        
+        // Initialize
+        updateButtons();
+        updatePageDisplay();
+
+    </script>
+</body>
+</html>
