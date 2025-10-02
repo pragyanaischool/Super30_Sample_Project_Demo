@@ -18,7 +18,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- DATA SIMULATION ---
+# --- DATA SIMULATION & LOADING ---
 @st.cache_data
 def create_synthetic_lending_club_data(num_samples=50000):
     """
@@ -58,6 +58,39 @@ def create_synthetic_lending_club_data(num_samples=50000):
     df['issue_year'] = df['issue_d'].dt.year
     return df
 
+@st.cache_data
+def load_data(uploaded_file):
+    """
+    Loads data from an uploaded CSV file or generates synthetic data if no file is uploaded.
+    """
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.success("Successfully loaded your custom data!")
+            # Basic validation
+            required_model_cols = ['loan_amnt', 'annual_inc', 'int_rate', 'dti', 'grade', 'purpose', 'loan_status']
+            if not all(col in df.columns for col in required_model_cols):
+                st.error(f"Your CSV is missing one or more required columns for modeling. Required: {required_model_cols}. Falling back to sample data.")
+                return create_synthetic_lending_club_data()
+            
+            # Feature engineering for uploaded data
+            if 'issue_d' in df.columns:
+                df['issue_d'] = pd.to_datetime(df['issue_d'], errors='coerce')
+                df['issue_year'] = df['issue_d'].dt.year
+            else:
+                df['issue_year'] = 2017 # Assign a default year if not present
+            
+            if 'credit_history_length' not in df.columns:
+                 st.warning("`credit_history_length` not found. A default value will be used for modeling.")
+                 df['credit_history_length'] = 10
+            
+            return df
+        except Exception as e:
+            st.error(f"Error reading the uploaded file: {e}. Falling back to sample data.")
+            return create_synthetic_lending_club_data()
+    # If no file is uploaded, use the synthetic data
+    return create_synthetic_lending_club_data()
+
 # --- MACHINE LEARNING MODEL TRAINING ---
 @st.cache_resource
 def train_all_models(df):
@@ -70,6 +103,12 @@ def train_all_models(df):
     numeric_features = ['loan_amnt', 'annual_inc', 'int_rate', 'dti', 'credit_history_length']
     categorical_features = ['grade', 'purpose']
     
+    # Ensure all required columns are present before training
+    for col in numeric_features + categorical_features:
+        if col not in df_model.columns:
+            st.error(f"Dataframe is missing the required column '{col}' for model training. Cannot proceed.")
+            st.stop()
+            
     X = df_model[numeric_features + categorical_features]
     y = df_model['loan_status']
     
@@ -86,8 +125,8 @@ def train_all_models(df):
         
     classifiers = {
         'Logistic Regression': LogisticRegression(random_state=42, class_weight='balanced'),
-        'Random Forest': RandomForestClassifier(random_state=42, class_weight='balanced', n_jobs=-1),
-        'Gradient Boosting': GradientBoostingClassifier(random_state=42)
+        'Random Forest': RandomForestClassifier(random_state=42, class_weight='balanced', n_jobs=-1, max_depth=10),
+        'Gradient Boosting': GradientBoostingClassifier(random_state=42, n_estimators=100, max_depth=5)
     }
     
     results = {}
@@ -102,10 +141,13 @@ def train_all_models(df):
         
         feature_importance = None
         if hasattr(classifier, 'feature_importances_'):
-            cat_feature_names = pipeline.named_steps['preprocessor'].named_transformers_['cat'].get_feature_names_out(categorical_features)
-            all_feature_names = numeric_features + list(cat_feature_names)
-            importances = pipeline.named_steps['classifier'].feature_importances_
-            feature_importance = pd.DataFrame({'feature': all_feature_names, 'importance': importances}).sort_values('importance', ascending=False)
+            try:
+                cat_feature_names = pipeline.named_steps['preprocessor'].named_transformers_['cat'].get_feature_names_out(categorical_features)
+                all_feature_names = numeric_features + list(cat_feature_names)
+                importances = pipeline.named_steps['classifier'].feature_importances_
+                feature_importance = pd.DataFrame({'feature': all_feature_names, 'importance': importances}).sort_values('importance', ascending=False)
+            except: # Handle cases where feature names can't be retrieved
+                feature_importance = None
 
         results[name] = {
             'pipeline': pipeline,
@@ -117,13 +159,18 @@ def train_all_models(df):
         
     return results
 
-# --- MAIN APP ---
-df = create_synthetic_lending_club_data()
-model_results = train_all_models(df)
-
 # --- SIDEBAR NAVIGATION ---
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", ["Project Report & EDA", "Predictive Modeling & Simulation"])
+
+st.sidebar.title("Data Source")
+uploaded_file = st.sidebar.file_uploader("Upload your own CSV", type=["csv"])
+st.sidebar.info("If no file is uploaded, the app will use a sample synthetic dataset for demonstration.")
+
+
+# --- MAIN APP ---
+df = load_data(uploaded_file)
+model_results = train_all_models(df)
 
 # --- PAGE 1: PROJECT REPORT & EDA ---
 if page == "Project Report & EDA":
@@ -173,8 +220,7 @@ if page == "Project Report & EDA":
         st.markdown("**Insight:** Most loans are concentrated below $20,000, with common peaks at round numbers like $10,000 and $20,000, indicating popular loan packages.")
     with col2:
         st.subheader("Income vs. Loan Amount by Grade")
-        # Sample for performance
-        df_sample = df.sample(n=5000, random_state=42)
+        df_sample = df.sample(n=min(5000, len(df)), random_state=42)
         fig = px.scatter(df_sample, x='annual_inc', y='loan_amnt', color='grade',
                          title="Higher Income Allows for Larger Loans",
                          labels={'annual_inc': 'Annual Income ($)', 'loan_amnt': 'Loan Amount ($)'},
@@ -206,14 +252,16 @@ if page == "Project Report & EDA":
 
     st.subheader("Geographic and Temporal Trends")
     col1, col2 = st.columns([1, 1])
-    with col1:
-        state_default_rate = df.groupby('addr_state')['loan_status'].apply(lambda x: (x == 'Charged Off').mean() * 100).reset_index()
-        fig = px.choropleth(state_default_rate, locations='addr_state', locationmode="USA-states", color='loan_status', scope="usa", color_continuous_scale="Reds", title="Regional Hot Spots for Loan Defaults", labels={'loan_status': 'Default Rate (%)'})
-        st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        default_rate_by_year = df.groupby('issue_year')['loan_status'].apply(lambda x: (x == 'Charged Off').mean() * 100).reset_index()
-        fig = px.line(default_rate_by_year, x='issue_year', y='loan_status', markers=True, title="Default Rate Fluctuates Annually", labels={'issue_year': 'Year of Loan Issuance', 'loan_status': 'Default Rate (%)'})
-        st.plotly_chart(fig, use_container_width=True)
+    if 'addr_state' in df.columns:
+        with col1:
+            state_default_rate = df.groupby('addr_state')['loan_status'].apply(lambda x: (x == 'Charged Off').mean() * 100).reset_index()
+            fig = px.choropleth(state_default_rate, locations='addr_state', locationmode="USA-states", color='loan_status', scope="usa", color_continuous_scale="Reds", title="Regional Hot Spots for Loan Defaults", labels={'loan_status': 'Default Rate (%)'})
+            st.plotly_chart(fig, use_container_width=True)
+    if 'issue_year' in df.columns:
+        with col2:
+            default_rate_by_year = df.groupby('issue_year')['loan_status'].apply(lambda x: (x == 'Charged Off').mean() * 100).reset_index()
+            fig = px.line(default_rate_by_year, x='issue_year', y='loan_status', markers=True, title="Default Rate Fluctuates Annually", labels={'issue_year': 'Year of Loan Issuance', 'loan_status': 'Default Rate (%)'})
+            st.plotly_chart(fig, use_container_width=True)
 
 # --- PAGE 2: PREDICTIVE MODELING ---
 elif page == "Predictive Modeling & Simulation":
@@ -253,7 +301,6 @@ elif page == "Predictive Modeling & Simulation":
         st.plotly_chart(fig, use_container_width=True)
         st.markdown("The matrix shows the model's performance in distinguishing between the two outcomes. The goal is to maximize the top-right (True Positives for default) and bottom-left (True Negatives) cells.")
 
-    # Feature Importance Plot
     if selected_model['feature_importance'] is not None:
         st.markdown("---")
         st.header("Model Feature Importance")
